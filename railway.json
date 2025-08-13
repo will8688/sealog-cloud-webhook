@@ -3,7 +3,6 @@
     "builder": "NIXPACKS"
   },
   "deploy": {
-    "startCommand": "hypercorn main:app --bind \"[::]:$PORT\"",
-    "healthcheckPath": "/health"
+    "startCommand": "hypercorn main:app --bind \"[::]:$PORT\""
   }
 }

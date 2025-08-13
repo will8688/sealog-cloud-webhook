@@ -3,7 +3,7 @@
     "builder": "NIXPACKS"
   },
   "deploy": {
-    "startCommand": "python webhook_service.py",
+    "startCommand": "hypercorn main:app --bind \"[::]:$PORT\"",
     "healthcheckPath": "/health"
   }
 }

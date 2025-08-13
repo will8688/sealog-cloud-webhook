@@ -13,6 +13,7 @@ app = FastAPI(title="Sea Log Webhook Service")
 
 # Configure Stripe
 stripe.api_key = os.getenv('STRIPE_SECRET_KEY')
+STRIPE_SECRET_KEY = os.getenv('STRIPE_SECRET_KEY')
 STRIPE_WEBHOOK_SECRET = os.getenv('STRIPE_WEBHOOK_SECRET')
 
 # Database configuration
@@ -120,7 +121,11 @@ async def handle_stripe_webhook(request: Request):
         print(f"Received webhook sig_header: {sig_header}")
 
         print(f"Received STRIPE_WEBHOOK_SECRET: {STRIPE_WEBHOOK_SECRET}...")  # Log first 100 bytes for brevity
-        
+
+        print(f"Received payload: {payload[:100]}...")  # Log first 100 bytes for brevity
+
+        print(f"Received STRIPE_SECRET_KEY: {STRIPE_SECRET_KEY}...") 
+
         if not sig_header:
             raise HTTPException(status_code=400, detail="Missing signature header")
         

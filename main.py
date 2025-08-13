@@ -113,7 +113,9 @@ async def handle_stripe_webhook(request: Request):
     try:
         # Get the raw body and signature header
         payload = await request.body()
-        sig_header = request.headers.get('stripe-signature')
+        sig_header = request.headers.get('stripe-signature');
+
+        
 
         print(f"Received webhook sig_header: {sig_header}")
 
@@ -130,6 +132,7 @@ async def handle_stripe_webhook(request: Request):
         except ValueError as e:
             raise HTTPException(status_code=400, detail="Invalid payload")
         except stripe.error.SignatureVerificationError as e:
+            print(f"Signature verification error: {str(e)}")
             raise HTTPException(status_code=400, detail="Invalid signature")
         
         # Handle the event

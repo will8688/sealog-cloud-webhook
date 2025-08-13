@@ -114,6 +114,8 @@ async def handle_stripe_webhook(request: Request):
         # Get the raw body and signature header
         payload = await request.body()
         sig_header = request.headers.get('stripe-signature')
+
+        print(f"Received webhook sig_header: {sig_header}")
         
         if not sig_header:
             raise HTTPException(status_code=400, detail="Missing signature header")

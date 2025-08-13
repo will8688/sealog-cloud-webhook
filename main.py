@@ -116,6 +116,8 @@ async def handle_stripe_webhook(request: Request):
         sig_header = request.headers.get('stripe-signature')
 
         print(f"Received webhook sig_header: {sig_header}")
+
+        print(f"Received STRIPE_WEBHOOK_SECRET: {STRIPE_WEBHOOK_SECRET}...")  # Log first 100 bytes for brevity
         
         if not sig_header:
             raise HTTPException(status_code=400, detail="Missing signature header")

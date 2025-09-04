@@ -6,10 +6,16 @@ from fastapi.responses import JSONResponse
 import stripe
 import os
 import sqlite3
+import json
 from datetime import datetime
 
 # Initialize FastAPI app
 app = FastAPI(title="Sea Log Webhook Service")
+
+# Create subscriptions table on startup
+@app.on_event("startup")
+async def startup_event():
+    create_subscriptions_table()
 
 # Configure Stripe
 stripe.api_key = os.getenv('STRIPE_SECRET_KEY')
@@ -69,39 +75,105 @@ def execute_query(query, params=None):
     finally:
         conn.close()
 
-def update_user_subscription(user_id, stripe_subscription_id, status='active'):
-    """Update user subscription status in database"""
+def create_subscriptions_table():
+    """Create subscriptions table if it doesn't exist"""
+    conn, db_type = get_db_connection()
+    if not conn:
+        return False
+    
     try:
-        # Get subscription details from Stripe
+        cursor = conn.cursor()
+        
+        if db_type == 'postgresql':
+            query = '''
+                CREATE TABLE IF NOT EXISTS subscriptions (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL,
+                    stripe_subscription_id VARCHAR(255) NOT NULL,
+                    stripe_price_id VARCHAR(255) NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(user_id, stripe_subscription_id, stripe_price_id)
+                )
+            '''
+        else:
+            # SQLite
+            query = '''
+                CREATE TABLE IF NOT EXISTS subscriptions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    stripe_subscription_id TEXT NOT NULL,
+                    stripe_price_id TEXT NOT NULL,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(user_id, stripe_subscription_id, stripe_price_id)
+                )
+            '''
+        
+        cursor.execute(query)
+        conn.commit()
+        print("Subscriptions table created successfully")
+        return True
+        
+    except Exception as e:
+        print(f"Error creating subscriptions table: {e}")
+        return False
+    finally:
+        conn.close()
+
+def update_user_subscription(user_id, stripe_subscription_id):
+    """Update user subscription status in database"""
+    conn, db_type = get_db_connection()
+    if not conn:
+        return False
+    
+    try:
+        cursor = conn.cursor()
+        
+        # Get the current subscription details from Stripe
         subscription = stripe.Subscription.retrieve(stripe_subscription_id)
         
-        current_period_start = datetime.fromtimestamp(subscription.current_period_start)
-        current_period_end = datetime.fromtimestamp(subscription.current_period_end)
+        # Get the customer ID from the subscription
+        customer_id = subscription.get('customer')
         
-        query = '''
-            UPDATE users 
-            SET stripe_subscription_id = ?, 
-                subscription_status = ?,
-                subscription_start = ?,
-                subscription_end = ?,
-                updated_at = ?
-            WHERE id = ?
-        '''
+       
+        delete_query = "DELETE FROM subscriptions WHERE user_id = %s"
+        cursor.execute(delete_query, (user_id,))
         
-        params = (
-            stripe_subscription_id,
-            status,
-            current_period_start.isoformat(),
-            current_period_end.isoformat(),
-            datetime.now().isoformat(),
-            user_id
-        )
         
-        return execute_query(query, params)
+        # Get all active subscriptions for this customer and insert them
+        if customer_id:
+            # List all active subscriptions for the customer
+            subscriptions = stripe.Subscription.list(
+                customer=customer_id,
+                status='active',
+                limit=100
+            )
+            
+            # Insert each subscription and its price IDs
+            for sub in subscriptions.data:
+                if sub.get('items'):
+                    for item in sub['items']['data']:
+                        if item.get('price') and item['price'].get('id'):
+                            
+                            insert_query = '''
+                                INSERT INTO subscriptions (user_id, stripe_subscription_id, stripe_price_id)
+                                VALUES (%s, %s, %s)
+                                ON CONFLICT (user_id, stripe_subscription_id, stripe_price_id) DO NOTHING
+                            '''
+                            cursor.execute(insert_query, (user_id, sub['id'], item['price']['id']))
+                           
+        
+        conn.commit()
+        print(f"Updated subscriptions for user {user_id}")
+        return True
         
     except Exception as e:
         print(f"Error updating subscription: {e}")
+        if conn:
+            conn.rollback()
         return False
+    finally:
+        if conn:
+            conn.close()
 
 @app.get("/")
 async def root():
@@ -148,7 +220,7 @@ async def handle_stripe_webhook(request: Request):
             subscription = event['data']['object']
             user_id = subscription['metadata'].get('user_id')
             if user_id:
-                success = update_user_subscription(int(user_id), subscription['id'], 'active')
+                success = update_user_subscription(int(user_id), subscription['id'])
                 print(f"Subscription created for user {user_id}: {'success' if success else 'failed'}")
         
         elif event['type'] == 'customer.subscription.updated':
@@ -157,7 +229,7 @@ async def handle_stripe_webhook(request: Request):
             user_id = subscription['metadata'].get('user_id')
             if user_id:
                 status = 'cancelled' if subscription['cancel_at_period_end'] else 'active'
-                success = update_user_subscription(int(user_id), subscription['id'], status)
+                success = update_user_subscription(int(user_id), subscription['id'])
                 print(f"Subscription updated for user {user_id}: status={status}, success={success}")
         
         elif event['type'] == 'customer.subscription.deleted':
@@ -165,7 +237,7 @@ async def handle_stripe_webhook(request: Request):
             subscription = event['data']['object']
             user_id = subscription['metadata'].get('user_id')
             if user_id:
-                success = update_user_subscription(int(user_id), subscription['id'], 'cancelled')
+                success = update_user_subscription(int(user_id), subscription['id'])
                 print(f"Subscription deleted for user {user_id}: {'success' if success else 'failed'}")
         
         elif event['type'] == 'invoice.payment_succeeded':
@@ -175,7 +247,7 @@ async def handle_stripe_webhook(request: Request):
                 subscription = stripe.Subscription.retrieve(invoice['subscription'])
                 user_id = subscription['metadata'].get('user_id')
                 if user_id:
-                    success = update_user_subscription(int(user_id), subscription['id'], 'active')
+                    success = update_user_subscription(int(user_id), subscription['id'])
                     print(f"Payment succeeded for user {user_id}: {'success' if success else 'failed'}")
         
         elif event['type'] == 'invoice.payment_failed':

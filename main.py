@@ -91,6 +91,7 @@ def create_subscriptions_table():
                     user_id INTEGER NOT NULL,
                     stripe_subscription_id VARCHAR(255) NOT NULL,
                     stripe_price_id VARCHAR(255) NOT NULL,
+                    stripe_product_id VARCHAR(255) NOT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     UNIQUE(user_id, stripe_subscription_id, stripe_price_id)
                 )
@@ -103,6 +104,7 @@ def create_subscriptions_table():
                     user_id INTEGER NOT NULL,
                     stripe_subscription_id TEXT NOT NULL,
                     stripe_price_id TEXT NOT NULL,
+                    stripe_product_id TEXT NOT NULL,
                     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                     UNIQUE(user_id, stripe_subscription_id, stripe_price_id)
                 )
@@ -134,7 +136,12 @@ def update_user_subscription(user_id, stripe_subscription_id):
         # Get the customer ID from the subscription
         customer_id = subscription.get('customer')
         
-       
+        # Update the stripe_customer_id in the users table
+        if customer_id:
+            update_user_query = "UPDATE users SET stripe_customer_id = %s WHERE id = %s"
+            cursor.execute(update_user_query, (customer_id, user_id))
+        
+        # Delete existing subscriptions for this user
         delete_query = "DELETE FROM subscriptions WHERE user_id = %s"
         cursor.execute(delete_query, (user_id,))
         
@@ -153,13 +160,15 @@ def update_user_subscription(user_id, stripe_subscription_id):
                 if sub.get('items'):
                     for item in sub['items']['data']:
                         if item.get('price') and item['price'].get('id'):
+                            # Get the product ID from the price
+                            product_id = item['price'].get('product', '')
                             
                             insert_query = '''
-                                INSERT INTO subscriptions (user_id, stripe_subscription_id, stripe_price_id)
-                                VALUES (%s, %s, %s)
+                                INSERT INTO subscriptions (user_id, stripe_subscription_id, stripe_price_id, stripe_product_id)
+                                VALUES (%s, %s, %s, %s)
                                 ON CONFLICT (user_id, stripe_subscription_id, stripe_price_id) DO NOTHING
                             '''
-                            cursor.execute(insert_query, (user_id, sub['id'], item['price']['id']))
+                            cursor.execute(insert_query, (user_id, sub['id'], item['price']['id'], product_id))
                            
         
         conn.commit()

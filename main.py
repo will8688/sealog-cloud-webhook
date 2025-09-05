@@ -111,8 +111,36 @@ def create_subscriptions_table():
             '''
         
         cursor.execute(query)
+        
+        # Check if stripe_product_id column exists, if not add it
+        if db_type == 'postgresql':
+            check_column_query = '''
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name = 'subscriptions' AND column_name = 'stripe_product_id'
+            '''
+            cursor.execute(check_column_query)
+            if not cursor.fetchone():
+                alter_query = '''
+                    ALTER TABLE subscriptions 
+                    ADD COLUMN IF NOT EXISTS stripe_product_id VARCHAR(255) NOT NULL DEFAULT ''
+                '''
+                cursor.execute(alter_query)
+                print("Added stripe_product_id column to subscriptions table")
+        else:
+            # SQLite - check column existence differently
+            cursor.execute("PRAGMA table_info(subscriptions)")
+            columns = [col[1] for col in cursor.fetchall()]
+            if 'stripe_product_id' not in columns:
+                alter_query = '''
+                    ALTER TABLE subscriptions 
+                    ADD COLUMN stripe_product_id TEXT NOT NULL DEFAULT ''
+                '''
+                cursor.execute(alter_query)
+                print("Added stripe_product_id column to subscriptions table")
+        
         conn.commit()
-        print("Subscriptions table created successfully")
+        print("Subscriptions table created/updated successfully")
         return True
         
     except Exception as e:

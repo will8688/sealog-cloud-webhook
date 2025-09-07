@@ -91,6 +91,7 @@ def create_subscriptions_table():
                     user_id INTEGER NOT NULL,
                     stripe_subscription_id VARCHAR(255) NOT NULL,
                     stripe_price_id VARCHAR(255) NOT NULL,
+                    status TEXT DEFAULT 'active',
                     stripe_product_id VARCHAR(255) NOT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     UNIQUE(user_id, stripe_subscription_id, stripe_price_id)
@@ -104,6 +105,7 @@ def create_subscriptions_table():
                     user_id INTEGER NOT NULL,
                     stripe_subscription_id TEXT NOT NULL,
                     stripe_price_id TEXT NOT NULL,
+                    status TEXT DEFAULT 'active',
                     stripe_product_id TEXT NOT NULL,
                     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                     UNIQUE(user_id, stripe_subscription_id, stripe_price_id)
@@ -192,8 +194,8 @@ def update_user_subscription(user_id, stripe_subscription_id):
                             product_id = item['price'].get('product', '')
                             
                             insert_query = '''
-                                INSERT INTO subscriptions (user_id, stripe_subscription_id, stripe_price_id, stripe_product_id)
-                                VALUES (%s, %s, %s, %s)
+                                INSERT INTO subscriptions (user_id, stripe_subscription_id, stripe_price_id, stripe_product_id, status)
+                                VALUES (%s, %s, %s, %s, 'active')
                                 ON CONFLICT (user_id, stripe_subscription_id, stripe_price_id) DO NOTHING
                             '''
                             cursor.execute(insert_query, (user_id, sub['id'], item['price']['id'], product_id))

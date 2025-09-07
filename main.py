@@ -165,6 +165,8 @@ def update_user_subscription(user_id, stripe_subscription_id):
         
         # Get the customer ID from the subscription
         customer_id = subscription.get('customer')
+
+        print(f"Updating subscription for user_id={user_id}, stripe_subscription_id={stripe_subscription_id}, customer_id={customer_id}")
         
         # Update the stripe_customer_id in the users table
         if customer_id:

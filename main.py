@@ -284,6 +284,7 @@ async def handle_stripe_webhook(request: Request):
         elif event['type'] == 'invoice.payment_succeeded':
             # Payment succeeded
             invoice = event['data']['object']
+            print(f"Processing invoice payment succeeded for invoice: {invoice['subscription']}")
             if invoice['subscription']:
                 subscription = stripe.Subscription.retrieve(invoice['subscription'])
                 user_id = subscription['metadata'].get('user_id')

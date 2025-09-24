@@ -285,7 +285,7 @@ def render_subscription_buttons(
     price_id = component.handle_subscription_callback()
         
     # Display subscription options
-    st.header("Choose Your Subscription Plan")
+    st.subheader("Choose Your Subscription Plan")
     
     # Create columns
     cols = st.columns(min(columns, len(price_ids)))
